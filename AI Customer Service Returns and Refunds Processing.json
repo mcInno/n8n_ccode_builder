@@ -55,11 +55,11 @@
           "values": [
             {
               "lookupColumn": "Order_ID",
-              "lookupValue": "={{ $json.output.order_id ?? '' }}"
+              "lookupValue": "={{ $json.normalizedOrderId ?? '' }}"
             },
             {
               "lookupColumn": "Customer_Email",
-              "lookupValue": "={{ $json.output.customer_email ?? '' }}"
+              "lookupValue": "={{ $json.normalizedCustomerEmail ?? '' }}"
             }
           ]
         },
@@ -543,25 +543,16 @@
     {
       "parameters": {
         "conditions": {
-          "combinator": "any",
+          "combinator": "and",
           "conditions": [
             {
               "id": "id-1",
-              "leftValue": "={{ $json.output.order_id ?? '' }}",
+              "leftValue": "={{ ($json.missingFields || []).length }}",
               "operator": {
-                "type": "string",
-                "operation": "equals"
+                "type": "number",
+                "operation": "gt"
               },
-              "rightValue": ""
-            },
-            {
-              "id": "id-2",
-              "leftValue": "={{ $json.output.customer_email ?? '' }}",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              },
-              "rightValue": ""
+              "rightValue": 0
             }
           ],
           "options": {
@@ -585,21 +576,21 @@
     },
     {
       "parameters": {
-        "jsCode": "const missing = [];\nif (!$json.output?.order_id) missing.push('your 4-digit order number');\nif (!$json.output?.customer_email) missing.push('the email address used for the purchase');\nreturn [{ json: { ...$json, missingFields: missing } }];"
+        "jsCode": "const rawOrderId = $json.output?.order_id ?? null;\nconst rawEmail = $json.output?.customer_email ?? null;\nconst cleanedOrderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : rawOrderId;\nconst cleanedEmail = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;\nconst normalizedOrderId = cleanedOrderId && cleanedOrderId !== 'null' && /^\\d{4}$/.test(String(cleanedOrderId)) ? String(cleanedOrderId) : null;\nconst normalizedEmail = cleanedEmail && cleanedEmail !== 'null' ? String(cleanedEmail) : null;\nconst missingFields = [];\nif (!normalizedOrderId) missingFields.push('your 4-digit order number');\nif (!normalizedEmail) missingFields.push('the email address used for the purchase');\nreturn [{ json: { ...$json, normalizedOrderId, normalizedCustomerEmail: normalizedEmail, missingFields } }];"
       },
       "id": "20d38494-47f9-4b17-893e-c098090226f9",
-      "name": "Compile Missing Details",
+      "name": "Normalize Identifiers",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1664,
-        912
+        -2064,
+        880
       ]
     },
     {
       "parameters": {
         "promptType": "define",
-        "text": "=You are assisting with an online order return and must politely gather any missing identifiers before proceeding.\n\nMissing details: {{ $json.missingFields.join(', ') }}\n\nCompose a concise chat reply that:\n- Thanks the customer for reaching out,\n- Clearly asks for each missing item,\n- Explains it is needed to locate their order,\n- Stays within 2 sentences.\nIf only one item is missing, ask just for that item. Return only the reply text.",
+        "text": "=You are assisting with an online order return and must politely gather any missing identifiers before proceeding.\n\nMissing details: {{ ($json.missingFields || []).join(', ') }}\n\nCompose a concise chat reply that:\n- Thanks the customer for reaching out,\n- Clearly asks for each missing item,\n- Explains it is needed to locate their order,\n- Stays within 2 sentences.\nIf only one item is missing, ask just for that item. Return only the reply text.",
         "options": {
           "systemMessage": "You help customer service agents collect required order lookup details during a returns conversation."
         }
@@ -685,7 +676,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const orderPart = $json.output?.order_id ? `order number ${$json.output.order_id}` : 'the order number you mentioned';\nconst emailPart = $json.output?.customer_email ? `email ${$json.output.customer_email}` : 'the email address you mentioned';\nconst prompt = `Thanks for sharing those details. I couldn't find an order using ${orderPart} with ${emailPart}. Could you double-check both and send any corrections?`;\nreturn [{ json: { ...$json, retryPrompt: prompt } }];"
+        "jsCode": "const orderPart = $json.normalizedOrderId ? `order number ${$json.normalizedOrderId}` : ($json.output?.order_id ? `order number ${$json.output.order_id}` : 'the order number you mentioned');\nconst emailPart = $json.normalizedCustomerEmail ? `email ${$json.normalizedCustomerEmail}` : ($json.output?.customer_email ? `email ${$json.output.customer_email}` : 'the email address you mentioned');\nconst prompt = `Thanks for sharing those details. I couldn't find an order using ${orderPart} with ${emailPart}. Could you double-check both and send any corrections?`;\nreturn [{ json: { ...$json, retryPrompt: prompt } }];"
       },
       "id": "5e713a3e-33e0-477f-a262-5f99775c53dc",
       "name": "Compose Lookup Retry",
@@ -727,6 +718,17 @@
       ]
     },
     "Extract Order Info": {
+      "main": [
+        [
+          {
+            "node": "Normalize Identifiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Identifiers": {
       "main": [
         [
           {
@@ -880,7 +882,7 @@
       "main": [
         [
           {
-            "node": "Compile Missing Details",
+            "node": "Request Order Details Message",
             "type": "main",
             "index": 0
           }
@@ -888,17 +890,6 @@
         [
           {
             "node": "Order Lookup (OMS)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compile Missing Details": {
-      "main": [
-        [
-          {
-            "node": "Request Order Details Message",
             "type": "main",
             "index": 0
           }
