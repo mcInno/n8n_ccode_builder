@@ -55,11 +55,11 @@
           "values": [
             {
               "lookupColumn": "Order_ID",
-              "lookupValue": "={{ $('Extract Order Info').item.json.output.order_id }}"
+              "lookupValue": "={{ $json.output.order_id ?? '' }}"
             },
             {
               "lookupColumn": "Customer_Email",
-              "lookupValue": "={{ $('Extract Order Info').item.json.output.customer_email }}"
+              "lookupValue": "={{ $json.output.customer_email ?? '' }}"
             }
           ]
         },
