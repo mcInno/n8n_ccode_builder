@@ -1,0 +1,724 @@
+{
+  "name": "AI Customer Service Returns and Refunds Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "responseNodes"
+        }
+      },
+      "id": "a8809e52-086c-4cd5-b35c-8e44a8d8b50f",
+      "name": "Customer Chat (Gladly)",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2320,
+        688
+      ],
+      "webhookId": "d5a8a5a3-9463-4709-8280-134ebaa79874"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=={{ $json.chatInput || $json.text || $json.message || $json.body || $json.query || '' }}\n",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=Output only JSON. No extra text. No code fences. One line.\n\n{\"order_id\":\"1234\",\"customer_email\":\"user@example.com\"}\n\nRules:\n- order_id: exactly 4 digits; if missing, use null (unquoted).\n- customer_email: valid email; if missing, use null (unquoted).\n- Keys and string values must be double-quoted.\n- Do not add explanations or newlines.\n"
+        }
+      },
+      "id": "cfd906fd-b8dd-4f88-becf-04d86fee746e",
+      "name": "Extract Order Info",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -2096,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA",
+          "mode": "list",
+          "cachedResultName": "Quince_Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 623879834,
+          "mode": "list",
+          "cachedResultName": "Quince_Orders.csv",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit#gid=623879834"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Order_ID",
+              "lookupValue": "={{ $('Extract Order Info').item.json.output.order_id }}"
+            },
+            {
+              "lookupColumn": "Customer_Email",
+              "lookupValue": "={{ $('Extract Order Info').item.json.output.customer_email }}"
+            }
+          ]
+        },
+        "combineFilters": "OR",
+        "options": {}
+      },
+      "id": "0afa295d-c951-4805-abe8-def3127476eb",
+      "name": "Order Lookup (OMS)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1744,
+        688
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZywJKnvYxs41UJ9r",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $('Order Lookup (OMS)').item.json.Return_Eligible }}",
+              "rightValue": "Yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "id-2",
+              "leftValue": "={{ $('Order Lookup (OMS)').item.json.Order_Status }}",
+              "rightValue": "Delivered",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "id-3",
+              "leftValue": "={{ $('Order Lookup (OMS)').item.json.Refund_Amount }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "20327d79-4104-4dd2-a8b5-ead2f28eb78a",
+      "name": "Eligibility Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1520,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rmaNumber = 'RMA-' + Math.floor(100000 + Math.random() * 900000);\nreturn [{ json: { ...items[0].json, rma_number: rmaNumber } }];"
+      },
+      "id": "c0540a27-fffb-4a09-9d81-baced8cd02ec",
+      "name": "Create RMA (WMS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA",
+          "mode": "list",
+          "cachedResultName": "Quince_Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 623879834,
+          "mode": "list",
+          "cachedResultName": "Quince_Orders.csv",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit#gid=623879834"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order_ID": "={{ $json.Order_ID }}",
+            "Order_Status": "Refunded"
+          },
+          "matchingColumns": [
+            "Order_ID"
+          ],
+          "schema": [
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order_Status",
+              "displayName": "Order_Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b54d3d1d-b8c0-4984-8c60-97c5d2224a81",
+      "name": "Process Refund (Payment)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1072,
+        496
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZywJKnvYxs41UJ9r",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1–2 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term “confirmation number,” not “RMA”),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5–7 business days.\n- Return ONLY the final message text. Nothing else.\n",
+        "options": {}
+      },
+      "id": "423fcb44-e974-4667-bb0c-2c18c82149c8",
+      "name": "Send Confirmation",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -848,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are composing the final escalation message to the customer. Use the current item values:\n- Refund_Amount = {{ $json.Refund_Amount }}\n- Return_Eligible = {{ $json.Return_Eligible }}\n- Order_Status = {{ $json.Order_Status }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no headings, no brackets, no placeholder variables).\n- Choose exactly one clear reason:\n  1) If Refund_Amount >= 200: say refunds >= $200 require manager approval.\n  2) Else if Return_Eligible !== \"Yes\": say the order doesn't meet return policy requirements.\n  3) Else if Order_Status !== \"Delivered\": say returns apply to delivered items only.\n- Be empathetic.\n- End with: \"A specialist will contact you within the hour.\"\n- Return ONLY the final message text. No preface, no template, no labels.\n",
+        "options": {}
+      },
+      "id": "eff39999-3903-49d1-afe0-d2ad2be07683",
+      "name": "Escalate to Human",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -1168,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -2096,
+        912
+      ],
+      "id": "552dc9f2-97c4-4a7d-83c6-bfc5f019f7db",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        608
+      ],
+      "id": "f89e0a0e-e4e3-4321-ab43-3b9b3cbf6fd5",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -1264,
+        1024
+      ],
+      "id": "29af6eb9-e93c-4edb-a19a-e12c02158b4e",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"order_id\", \"customer_email\"],\n  \"properties\": {\n    \"order_id\": { \"type\": [\"string\",\"null\"], \"pattern\": \"^\\\\d{4}$\" },\n    \"customer_email\": { \"type\": [\"string\",\"null\"], \"format\": \"email\" }\n  }\n}\n"
+      },
+      "id": "9cecd400-a378-409b-a9bb-bfc642dfc14b",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -1904,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA",
+          "mode": "list",
+          "cachedResultName": "Quince_Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 76292074,
+          "mode": "list",
+          "cachedResultName": "Conversation_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit#gid=76292074"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now }}",
+            "Order_ID": "={{ $item(0).$node[\"Order Lookup (OMS)\"].json[\"Order_ID\"] }}",
+            "Outcome": "={{ $if($(\"Send Confirmation\").isExecuted, 'Automated', 'Escalated') }}",
+            "Refund_Amount": "={{ $item(0).$node[\"Order Lookup (OMS)\"].json[\"Refund_Amount\"] }}",
+            "Decision_Reason": "Refund_Amount < $200"
+          },
+          "matchingColumns": [
+            "Timestamp"
+          ],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outcome",
+              "displayName": "Outcome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Refund_Amount",
+              "displayName": "Refund_Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Decision_Reason",
+              "displayName": "Decision_Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5b0d43cf-3124-48c8-b3fa-df700b0f0d9d",
+      "name": "Eval Log - Automated",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -480,
+        432
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZywJKnvYxs41UJ9r",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA",
+          "mode": "list",
+          "cachedResultName": "Quince_Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 76292074,
+          "mode": "list",
+          "cachedResultName": "Conversation_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA/edit#gid=76292074"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now }}",
+            "Order_ID": "={{ $item(0).$node[\"Order Lookup (OMS)\"].json[\"Order_ID\"] }}",
+            "Outcome": "Escalated",
+            "Refund_Amount": "={{ $item(0).$node[\"Order Lookup (OMS)\"].json[\"Refund_Amount\"] }}",
+            "Decision_Reason": "=Refund_Amount >= $200"
+          },
+          "matchingColumns": [
+            "Timestamp"
+          ],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Order_ID",
+              "displayName": "Order_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Outcome",
+              "displayName": "Outcome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Refund_Amount",
+              "displayName": "Refund_Amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Decision_Reason",
+              "displayName": "Decision_Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3ff2af83-22d9-426c-a4aa-5862a459d926",
+      "name": "Eval Log - Escalated",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -816,
+        896
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZywJKnvYxs41UJ9r",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "message": "={{ $('Escalate to Human').item.json.output }}",
+        "waitUserReply": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        896
+      ],
+      "id": "4fd1aaa8-d995-4918-be19-a728922ef073",
+      "name": "Reply — Escalated",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "message": "={{ $('Send Confirmation').item.json.output }}",
+        "waitUserReply": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        448
+      ],
+      "id": "1c97f52b-e293-44e7-bacc-4217df3efcfa",
+      "name": "Respond to Chat",
+      "executeOnce": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Customer Chat (Gladly)": {
+      "main": [
+        [
+          {
+            "node": "Extract Order Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Order Info": {
+      "main": [
+        [
+          {
+            "node": "Order Lookup (OMS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Lookup (OMS)": {
+      "main": [
+        [
+          {
+            "node": "Eligibility Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eligibility Check": {
+      "main": [
+        [
+          {
+            "node": "Create RMA (WMS)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate to Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create RMA (WMS)": {
+      "main": [
+        [
+          {
+            "node": "Process Refund (Payment)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Refund (Payment)": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Eval Log - Automated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate to Human": {
+      "main": [
+        [
+          {
+            "node": "Eval Log - Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Order Info",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Escalate to Human",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extract Order Info",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eval Log - Escalated": {
+      "main": [
+        [
+          {
+            "node": "Reply — Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eval Log - Automated": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "07319d60-c55c-4522-8000-7eb21fde2524",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "febc7b0df9c40a6e186e80119ed25cf848657610c8275337688bd7b18b8af33f"
+  },
+  "id": "cLIxSe80pLLIzvEN",
+  "tags": [
+    {
+      "updatedAt": "2025-10-31T01:20:28.712Z",
+      "createdAt": "2025-10-31T01:20:28.712Z",
+      "id": "xMcA11414WUgQVIw",
+      "name": "n8n-builder"
+    }
+  ]
+}
