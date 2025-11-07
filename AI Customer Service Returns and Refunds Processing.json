@@ -64,7 +64,9 @@
           ]
         },
         "combineFilters": "OR",
-        "options": {}
+        "options": {
+          "alwaysOutputData": true
+        }
       },
       "id": "0afa295d-c951-4805-abe8-def3127476eb",
       "name": "Order Lookup (OMS)",
@@ -213,7 +215,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1–2 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term “confirmation number,” not “RMA”),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5–7 business days.\n- Return ONLY the final message text. Nothing else.\n",
+        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1\u20132 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term \u201cconfirmation number,\u201d not \u201cRMA\u201d),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5\u20137 business days.\n- Return ONLY the final message text. Nothing else.\n",
         "options": {}
       },
       "id": "423fcb44-e974-4667-bb0c-2c18c82149c8",
@@ -519,7 +521,7 @@
         896
       ],
       "id": "4fd1aaa8-d995-4918-be19-a728922ef073",
-      "name": "Reply — Escalated",
+      "name": "Reply \u2014 Escalated",
       "executeOnce": true
     },
     {
@@ -646,6 +648,69 @@
           "name": "OpenRouter account"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.Order_ID ?? '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c1c76f40-7a6d-4701-a817-efea02cb94c0",
+      "name": "Order Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1520,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const orderPart = $json.output?.order_id ? `order number ${$json.output.order_id}` : 'the order number you mentioned';\nconst emailPart = $json.output?.customer_email ? `email ${$json.output.customer_email}` : 'the email address you mentioned';\nconst prompt = `Thanks for sharing those details. I couldn't find an order using ${orderPart} with ${emailPart}. Could you double-check both and send any corrections?`;\nreturn [{ json: { ...$json, retryPrompt: prompt } }];"
+      },
+      "id": "5e713a3e-33e0-477f-a262-5f99775c53dc",
+      "name": "Compose Lookup Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "message": "={{ $json.retryPrompt }}",
+        "waitUserReply": true,
+        "options": {}
+      },
+      "id": "7152f93c-013d-43be-9834-3e00cc6cb3a8",
+      "name": "Request Corrected Details",
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        912
+      ],
+      "executeOnce": true
     }
   ],
   "pinData": {},
@@ -676,7 +741,7 @@
       "main": [
         [
           {
-            "node": "Eligibility Check",
+            "node": "Order Found?",
             "type": "main",
             "index": 0
           }
@@ -793,7 +858,7 @@
       "main": [
         [
           {
-            "node": "Reply — Escalated",
+            "node": "Reply \u2014 Escalated",
             "type": "main",
             "index": 0
           }
@@ -857,6 +922,35 @@
           {
             "node": "Request Order Details Message",
             "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Found?": {
+      "main": [
+        [
+          {
+            "node": "Eligibility Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose Lookup Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Lookup Retry": {
+      "main": [
+        [
+          {
+            "node": "Request Corrected Details",
+            "type": "main",
             "index": 0
           }
         ]
