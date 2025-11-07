@@ -37,6 +37,140 @@
     },
     {
       "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"order_id\", \"customer_email\"],\n  \"properties\": {\n    \"order_id\": { \"type\": [\"string\",\"null\"], \"pattern\": \"^\\\\d{4}$\" },\n    \"customer_email\": { \"type\": [\"string\",\"null\"], \"format\": \"email\" }\n  }\n}\n"
+      },
+      "id": "c3aa0643-92a0-47c4-84ef-94799153bf5c",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -2096,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -2320,
+        912
+      ],
+      "id": "c7dae583-da56-485b-a6b0-09be96a70312",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawOrderId = $json.output?.order_id ?? null;\nconst rawEmail = $json.output?.customer_email ?? null;\nconst cleanedOrderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : rawOrderId;\nconst cleanedEmail = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;\nconst normalizedOrderId = cleanedOrderId && cleanedOrderId !== 'null' && /^\\d{4}$/.test(String(cleanedOrderId)) ? String(cleanedOrderId) : null;\nconst normalizedEmail = cleanedEmail && cleanedEmail !== 'null' ? String(cleanedEmail) : null;\nconst missingFields = [];\nif (!normalizedOrderId) missingFields.push('your 4-digit order number');\nif (!normalizedEmail) missingFields.push('the email address used for the purchase');\nreturn [{ json: { ...$json, normalizedOrderId, normalizedCustomerEmail: normalizedEmail, missingFields } }];"
+      },
+      "id": "6dd3db70-5e44-4681-b155-613371d71a0a",
+      "name": "Normalize Identifiers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ ($json.missingFields || []).length }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "rightValue": 0
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f5a43eb8-73a4-4c77-b7dd-136d9b6e4c03",
+      "name": "Missing Identifiers?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1648,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are assisting with an online order return and must politely gather any missing identifiers before proceeding.\n\nMissing details: {{ ($json.missingFields || []).join(', ') }}\n\nCompose a concise chat reply that:\n- Thanks the customer for reaching out,\n- Clearly asks for each missing item,\n- Explains it is needed to locate their order,\n- Stays within 2 sentences.\nIf only one item is missing, ask just for that item. Return only the reply text.",
+        "options": {
+          "systemMessage": "You help customer service agents collect required order lookup details during a returns conversation."
+        }
+      },
+      "id": "4e081c2c-8dfa-4ebd-9a29-185bcfe83009",
+      "name": "Request Order Details Message",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -1408,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "message": "={{ $('Request Order Details Message').item.json.output }}",
+        "waitUserReply": true,
+        "options": {}
+      },
+      "id": "344b720b-4ce4-442a-97bc-b705f64c8051",
+      "name": "Request Order Details",
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -1168,
+        912
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "id": "ee97b2e3-6e4b-4af1-99de-ef45451565cc",
+      "name": "OpenRouter Chat Model3",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -1408,
+        1120
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
         "documentId": {
           "__rl": true,
           "value": "1DInxlIfHxR0Ot1-cfKNcgaeQDpOtmFcWB24jDScBOeA",
@@ -55,11 +189,11 @@
           "values": [
             {
               "lookupColumn": "Order_ID",
-              "lookupValue": "={{ $('Extract Order Info').item.json.output.order_id }}"
+              "lookupValue": "={{ $json.normalizedOrderId ?? '' }}"
             },
             {
               "lookupColumn": "Customer_Email",
-              "lookupValue": "={{ $('Extract Order Info').item.json.output.customer_email }}"
+              "lookupValue": "={{ $json.normalizedCustomerEmail ?? '' }}"
             }
           ]
         },
@@ -71,7 +205,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -1744,
+        -1408,
         688
       ],
       "credentials": {
@@ -80,6 +214,40 @@
           "name": "Google Sheets account"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $('Order Lookup (OMS)').item.json.Order_ID ?? '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "00c56839-0a23-40d9-89e0-127ad79d11f4",
+      "name": "Order Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1184,
+        688
+      ]
     },
     {
       "parameters": {
@@ -129,7 +297,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1520,
+        -960,
         688
       ]
     },
@@ -142,7 +310,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1296,
+        -736,
         496
       ]
     },
@@ -195,12 +363,12 @@
         },
         "options": {}
       },
-      "id": "b54d3d1d-b8c0-4984-8c60-97c5d2224a81",
+      "id": "229f793d-5156-419b-b7f4-4d93eca30dc6",
       "name": "Process Refund (Payment)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -1072,
+        -512,
         496
       ],
       "credentials": {
@@ -213,15 +381,15 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1–2 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term “confirmation number,” not “RMA”),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5–7 business days.\n- Return ONLY the final message text. Nothing else.\n",
+        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1\u20132 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term \u201cconfirmation number,\u201d not \u201cRMA\u201d),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5\u20137 business days.\n- Return ONLY the final message text. Nothing else.\n",
         "options": {}
       },
-      "id": "423fcb44-e974-4667-bb0c-2c18c82149c8",
+      "id": "02b84405-bc10-429a-b750-be8137fd7fcc",
       "name": "Send Confirmation",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
       "position": [
-        -848,
+        -288,
         384
       ]
     },
@@ -231,13 +399,13 @@
         "text": "=You are composing the final escalation message to the customer. Use the current item values:\n- Refund_Amount = {{ $json.Refund_Amount }}\n- Return_Eligible = {{ $json.Return_Eligible }}\n- Order_Status = {{ $json.Order_Status }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no headings, no brackets, no placeholder variables).\n- Choose exactly one clear reason:\n  1) If Refund_Amount >= 200: say refunds >= $200 require manager approval.\n  2) Else if Return_Eligible !== \"Yes\": say the order doesn't meet return policy requirements.\n  3) Else if Order_Status !== \"Delivered\": say returns apply to delivered items only.\n- Be empathetic.\n- End with: \"A specialist will contact you within the hour.\"\n- Return ONLY the final message text. No preface, no template, no labels.\n",
         "options": {}
       },
-      "id": "eff39999-3903-49d1-afe0-d2ad2be07683",
+      "id": "ebd8236d-53d3-4d86-b495-8813bccacd33",
       "name": "Escalate to Human",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
       "position": [
-        -1168,
-        848
+        -512,
+        880
       ]
     },
     {
@@ -248,30 +416,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
       "position": [
-        -2096,
-        912
+        -288,
+        592
       ],
-      "id": "552dc9f2-97c4-4a7d-83c6-bfc5f019f7db",
-      "name": "OpenRouter Chat Model",
-      "credentials": {
-        "openRouterApi": {
-          "id": "g1c2oe8mRkJGr8XC",
-          "name": "OpenRouter account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "model": "anthropic/claude-sonnet-4.5",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
-      "position": [
-        -784,
-        608
-      ],
-      "id": "f89e0a0e-e4e3-4321-ab43-3b9b3cbf6fd5",
+      "id": "2916fe88-c92a-4022-bd98-c49f2570ab8c",
       "name": "OpenRouter Chat Model1",
       "credentials": {
         "openRouterApi": {
@@ -288,10 +436,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
       "position": [
-        -1264,
-        1024
+        -512,
+        1104
       ],
-      "id": "29af6eb9-e93c-4edb-a19a-e12c02158b4e",
+      "id": "f9935b01-6c40-44c7-b4f8-bcef49cc420d",
       "name": "OpenRouter Chat Model2",
       "credentials": {
         "openRouterApi": {
@@ -302,17 +450,32 @@
     },
     {
       "parameters": {
-        "schemaType": "manual",
-        "inputSchema": "={\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"order_id\", \"customer_email\"],\n  \"properties\": {\n    \"order_id\": { \"type\": [\"string\",\"null\"], \"pattern\": \"^\\\\d{4}$\" },\n    \"customer_email\": { \"type\": [\"string\",\"null\"], \"format\": \"email\" }\n  }\n}\n"
+        "jsCode": "const orderPart = $json.normalizedOrderId ? `order number ${$json.normalizedOrderId}` : ($json.output?.order_id ? `order number ${$json.output.order_id}` : 'the order number you mentioned');\nconst emailPart = $json.normalizedCustomerEmail ? `email ${$json.normalizedCustomerEmail}` : ($json.output?.customer_email ? `email ${$json.output.customer_email}` : 'the email address you mentioned');\nconst prompt = `Thanks for sharing those details. I couldn't find an order using ${orderPart} with ${emailPart}. Could you double-check both and send any corrections?`;\nreturn [{ json: { ...$json, retryPrompt: prompt } }];"
       },
-      "id": "9cecd400-a378-409b-a9bb-bfc642dfc14b",
-      "name": "Structured Output Parser",
-      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
-      "typeVersion": 1.3,
+      "id": "abb838b9-1620-4eb6-ac60-2af5075eead5",
+      "name": "Compose Lookup Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        -1904,
-        896
+        -736,
+        880
       ]
+    },
+    {
+      "parameters": {
+        "message": "={{ $json.retryPrompt }}",
+        "waitUserReply": true,
+        "options": {}
+      },
+      "id": "89a9f1a5-2c54-43ac-b95e-12d10630435a",
+      "name": "Request Corrected Details",
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        880
+      ],
+      "executeOnce": true
     },
     {
       "parameters": {
@@ -395,13 +558,13 @@
         },
         "options": {}
       },
-      "id": "5b0d43cf-3124-48c8-b3fa-df700b0f0d9d",
+      "id": "3ea5e1f1-427b-47a2-8069-3955fe8caab5",
       "name": "Eval Log - Automated",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -480,
-        432
+        -64,
+        400
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -491,13 +654,13 @@
         },
         "options": {}
       },
-      "id": "3ff2af83-22d9-426c-a4aa-5862a459d926",
+      "id": "4ad25a6f-938f-466a-bd01-9dc91ecfa4da",
       "name": "Eval Log - Escalated",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -816,
-        896
+        -288,
+        880
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -515,11 +678,11 @@
       "type": "@n8n/n8n-nodes-langchain.chat",
       "typeVersion": 1,
       "position": [
-        -512,
-        896
+        -32,
+        880
       ],
-      "id": "4fd1aaa8-d995-4918-be19-a728922ef073",
-      "name": "Reply — Escalated",
+      "id": "0fe95fac-1a23-4c33-9498-e4bd9a50aa97",
+      "name": "Reply \u2014 Escalated",
       "executeOnce": true
     },
     {
@@ -531,15 +694,14 @@
       "type": "@n8n/n8n-nodes-langchain.chat",
       "typeVersion": 1,
       "position": [
-        -256,
-        448
+        224,
+        400
       ],
-      "id": "1c97f52b-e293-44e7-bacc-4217df3efcfa",
+      "id": "569f71a9-6131-4a5a-b457-9a360db56dfb",
       "name": "Respond to Chat",
       "executeOnce": true
     }
   ],
-  "pinData": {},
   "connections": {
     "Customer Chat (Gladly)": {
       "main": [
@@ -556,7 +718,47 @@
       "main": [
         [
           {
+            "node": "Normalize Identifiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Identifiers": {
+      "main": [
+        [
+          {
+            "node": "Missing Identifiers?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Missing Identifiers?": {
+      "main": [
+        [
+          {
+            "node": "Request Order Details Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Order Lookup (OMS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Order Details Message": {
+      "main": [
+        [
+          {
+            "node": "Request Order Details",
             "type": "main",
             "index": 0
           }
@@ -567,7 +769,25 @@
       "main": [
         [
           {
+            "node": "Order Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Found?": {
+      "main": [
+        [
+          {
             "node": "Eligibility Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose Lookup Retry",
             "type": "main",
             "index": 0
           }
@@ -625,6 +845,17 @@
         ]
       ]
     },
+    "Eval Log - Automated": {
+      "main": [
+        [
+          {
+            "node": "Respond to Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Escalate to Human": {
       "main": [
         [
@@ -636,11 +867,44 @@
         ]
       ]
     },
+    "Eval Log - Escalated": {
+      "main": [
+        [
+          {
+            "node": "Reply \u2014 Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Lookup Retry": {
+      "main": [
+        [
+          {
+            "node": "Request Corrected Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "OpenRouter Chat Model": {
       "ai_languageModel": [
         [
           {
             "node": "Extract Order Info",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Request Order Details Message",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -675,28 +939,6 @@
           {
             "node": "Extract Order Info",
             "type": "ai_outputParser",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Eval Log - Escalated": {
-      "main": [
-        [
-          {
-            "node": "Reply — Escalated",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Eval Log - Automated": {
-      "main": [
-        [
-          {
-            "node": "Respond to Chat",
-            "type": "main",
             "index": 0
           }
         ]
