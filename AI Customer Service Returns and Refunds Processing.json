@@ -37,6 +37,21 @@
     },
     {
       "parameters": {
+        "mode": "combine",
+        "options": {},
+        "combineBy": "combineByPosition"
+      },
+      "id": "0e986f0c-19bd-4b4e-ae36-1e73caa2c120",
+      "name": "Merge Chat Context",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        -1984,
+        688
+      ]
+    },
+    {
+      "parameters": {
         "model": "anthropic/claude-sonnet-4.5",
         "options": {}
       },
@@ -57,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function safeParse(value) {\n  if (value && typeof value === 'string') {\n    const trimmed = value.trim();\n    if (!trimmed) {\n      return null;\n    }\n    try {\n      return JSON.parse(trimmed);\n    } catch (error) {\n      const start = trimmed.indexOf('{');\n      const end = trimmed.lastIndexOf('}');\n      if (start !== -1 && end !== -1 && end > start) {\n        const candidate = trimmed.slice(start, end + 1);\n        try {\n          return JSON.parse(candidate);\n        } catch (innerError) {\n          return null;\n        }\n      }\n      return null;\n    }\n  }\n  return typeof value === 'object' && value !== null ? value : null;\n}\n\nconst extraction = safeParse($json.output) || {};\nconst rawOrderId = extraction.order_id ?? null;\nconst rawEmail = extraction.customer_email ?? null;\n\nconst cleanedOrderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : rawOrderId;\nconst cleanedEmail = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;\n\nconst freshOrderId = cleanedOrderId && cleanedOrderId !== 'null' && /^\\\\d{4}$/.test(String(cleanedOrderId)) ? String(cleanedOrderId) : null;\nconst freshEmail = cleanedEmail && cleanedEmail !== 'null' ? String(cleanedEmail) : null;\n\nconst sessionSource = $node[\"Customer Chat (Gladly)\"].item.json || {};\nconst sessionId = sessionSource.sessionId || sessionSource.chatSessionId || null;\nconst store = this.getWorkflowStaticData('global');\nconst sessionState = sessionId && store[sessionId] ? store[sessionId] : { orderId: null, email: null };\n\nif (freshOrderId) sessionState.orderId = freshOrderId;\nif (freshEmail) sessionState.email = freshEmail;\n\nif (sessionId) {\n  store[sessionId] = sessionState;\n}\n\nconst normalizedOrderId = sessionState.orderId || null;\nconst normalizedCustomerEmail = sessionState.email || null;\nconst missingFields = [];\nif (!normalizedOrderId) missingFields.push('your 4-digit order number');\nif (!normalizedCustomerEmail) missingFields.push('the email address used for the purchase');\n\nreturn [{ json: { ...$json, normalizedOrderId, normalizedCustomerEmail, missingFields, sessionId } }];"
+        "jsCode": "function safeParse(value) {\n  if (typeof value === 'string') {\n    const trimmed = value.trim();\n    if (!trimmed) {\n      return null;\n    }\n    try {\n      return JSON.parse(trimmed);\n    } catch (error) {\n      const start = trimmed.indexOf('{');\n      const end = trimmed.lastIndexOf('}');\n      if (start !== -1 && end !== -1 && end > start) {\n        const candidate = trimmed.slice(start, end + 1);\n        try {\n          return JSON.parse(candidate);\n        } catch (innerError) {\n          return null;\n        }\n      }\n      return null;\n    }\n  }\n  return typeof value === 'object' && value !== null ? value : null;\n}\n\nconst current = (items[0] && items[0].json) ? { ...items[0].json } : {};\nconst extraction = safeParse(current.output) || {};\nconst rawOrderId = extraction.order_id ?? null;\nconst rawEmail = extraction.customer_email ?? null;\n\nconst cleanedOrderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : rawOrderId;\nconst cleanedEmail = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;\n\nconst freshOrderId = cleanedOrderId && cleanedOrderId !== 'null' && /^\\d{4}$/.test(String(cleanedOrderId)) ? String(cleanedOrderId) : null;\nconst freshEmail = cleanedEmail && cleanedEmail !== 'null' ? String(cleanedEmail) : null;\n\nconst sessionId = current.sessionId || current.chatSessionId || current.session_id || (current.metadata && current.metadata.sessionId) || null;\nconst store = this.getWorkflowStaticData('global');\nconst sessionState = sessionId && store[sessionId] ? { ...store[sessionId] } : { orderId: null, email: null };\n\nif (freshOrderId) sessionState.orderId = freshOrderId;\nif (freshEmail) sessionState.email = freshEmail;\n\nif (sessionId) {\n  store[sessionId] = sessionState;\n}\n\nconst normalizedOrderId = sessionState.orderId || null;\nconst normalizedCustomerEmail = sessionState.email || null;\nconst missingFields = [];\nif (!normalizedOrderId) missingFields.push('your 4-digit order number');\nif (!normalizedCustomerEmail) missingFields.push('the email address used for the purchase');\n\nreturn [{ json: { ...current, normalizedOrderId, normalizedCustomerEmail, missingFields, sessionId } }];"
       },
       "id": "6dd3db70-5e44-4681-b155-613371d71a0a",
       "name": "Normalize Identifiers",
@@ -200,6 +215,41 @@
           "name": "Google Sheets account"
         }
       }
+    },
+    {
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "sessionId",
+              "type": "string",
+              "value": "={{ $item(0).$node[\"Normalize Identifiers\"].json.sessionId }}"
+            },
+            {
+              "id": "2",
+              "name": "normalizedOrderId",
+              "type": "string",
+              "value": "={{ $item(0).$node[\"Normalize Identifiers\"].json.normalizedOrderId }}"
+            },
+            {
+              "id": "3",
+              "name": "normalizedCustomerEmail",
+              "type": "string",
+              "value": "={{ $item(0).$node[\"Normalize Identifiers\"].json.normalizedCustomerEmail }}"
+            }
+          ]
+        }
+      },
+      "id": "d4f0f29f-9b5f-4dff-9e83-1f2872c8f5f7",
+      "name": "Carry Session Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -1296,
+        688
+      ]
     },
     {
       "parameters": {
@@ -561,7 +611,30 @@
     },
     {
       "parameters": {
-        "jsCode": "const sessionSource = $node[\"Customer Chat (Gladly)\"].item.json || {};\nconst sessionId = sessionSource.sessionId || sessionSource.chatSessionId || null;\nif (sessionId) {\n  const store = this.getWorkflowStaticData('global');\n  delete store[sessionId];\n}\nreturn items;"
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "sessionId",
+              "type": "string",
+              "value": "={{ $item(0).$node[\"Carry Session Context\"].json.sessionId }}"
+            }
+          ]
+        }
+      },
+      "id": "2a3d6db1-2d41-4a9a-a41d-3e9d4f42bb9d",
+      "name": "Prepare Session Close (Success)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -32,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentItem = (items[0] && items[0].json) ? items[0].json : {};\nconst sessionId = currentItem.sessionId || currentItem.chatSessionId || currentItem.session_id || null;\nif (sessionId) {\n  const store = this.getWorkflowStaticData('global');\n  delete store[sessionId];\n}\nreturn items;"
       },
       "id": "5d50a14e-5e37-468b-8a46-2e19f2392a1f",
       "name": "Clear Session State (Success)",
@@ -670,7 +743,30 @@
     },
     {
       "parameters": {
-        "jsCode": "const sessionSource = $node[\"Customer Chat (Gladly)\"].item.json || {};\nconst sessionId = sessionSource.sessionId || sessionSource.chatSessionId || null;\nif (sessionId) {\n  const store = this.getWorkflowStaticData('global');\n  delete store[sessionId];\n}\nreturn items;"
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "sessionId",
+              "type": "string",
+              "value": "={{ $item(0).$node[\"Carry Session Context\"].json.sessionId }}"
+            }
+          ]
+        }
+      },
+      "id": "f1ddbf9d-98db-4a61-a986-0f17533b8ff0",
+      "name": "Prepare Session Close (Escalated)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -160,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentItem = (items[0] && items[0].json) ? items[0].json : {};\nconst sessionId = currentItem.sessionId || currentItem.chatSessionId || currentItem.session_id || null;\nif (sessionId) {\n  const store = this.getWorkflowStaticData('global');\n  delete store[sessionId];\n}\nreturn items;"
       },
       "id": "b63bd6a5-9726-4a70-8e9b-17a507b2ea43",
       "name": "Clear Session State (Escalated)",
@@ -722,6 +818,11 @@
             "node": "Extract Order Info",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Merge Chat Context",
+            "type": "main",
+            "index": 1
           }
         ]
       ]
@@ -730,7 +831,7 @@
       "main": [
         [
           {
-            "node": "Normalize Identifiers",
+            "node": "Merge Chat Context",
             "type": "main",
             "index": 0
           }
@@ -781,7 +882,7 @@
       "main": [
         [
           {
-            "node": "Order Found?",
+            "node": "Carry Session Context",
             "type": "main",
             "index": 0
           }
@@ -861,7 +962,7 @@
       "main": [
         [
           {
-            "node": "Clear Session State (Success)",
+            "node": "Prepare Session Close (Success)",
             "type": "main",
             "index": 0
           }
@@ -894,7 +995,7 @@
       "main": [
         [
           {
-            "node": "Clear Session State (Escalated)",
+            "node": "Prepare Session Close (Escalated)",
             "type": "main",
             "index": 0
           }
@@ -962,6 +1063,50 @@
           {
             "node": "Escalate to Human",
             "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Chat Context": {
+      "main": [
+        [
+          {
+            "node": "Normalize Identifiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carry Session Context": {
+      "main": [
+        [
+          {
+            "node": "Order Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Session Close (Success)": {
+      "main": [
+        [
+          {
+            "node": "Clear Session State (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Session Close (Escalated)": {
+      "main": [
+        [
+          {
+            "node": "Clear Session State (Escalated)",
+            "type": "main",
             "index": 0
           }
         ]
