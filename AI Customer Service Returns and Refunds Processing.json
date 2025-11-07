@@ -20,10 +20,10 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Extract the 4-digit order number and customer email address from the message below. Respond with a single-line JSON object that matches this schema: {\"order_id\":\"1234\",\"customer_email\":\"user@example.com\"}.\n- Use null (without quotes) when a value is not provided.\n- order_id must be four digits when present.\n- customer_email must be a valid email string when present.\n- No explanations, code fences, or additional text.\n\nCustomer message:\n{{ $json.chatInput || $json.text || $json.message || $json.body || $json.query || '' }}\n",
-        "hasOutputParser": false,
+        "text": "=={{ $json.chatInput || $json.text || $json.message || $json.body || $json.query || '' }}\n",
+        "hasOutputParser": true,
         "options": {
-          "systemMessage": "You are a data extraction assistant that always replies with compact JSON."
+          "systemMessage": "=Output only JSON. No extra text. No code fences. One line.\n\n{\"order_id\":\"1234\",\"customer_email\":\"user@example.com\"}\n\nRules:\n- order_id: exactly 4 digits; if missing, use null (unquoted).\n- customer_email: valid email; if missing, use null (unquoted).\n- Keys and string values must be double-quoted.\n- Do not add explanations or newlines.\n"
         }
       },
       "id": "cfd906fd-b8dd-4f88-becf-04d86fee746e",
@@ -37,138 +37,64 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "options": {},
-        "combineBy": "combineByPosition"
+        "jsCode": "const item = (items[0] && items[0].json) ? { ...items[0].json } : {};\nconst output = item.output && typeof item.output === 'object' ? item.output : {};\nconst rawOrderId = output.order_id ?? null;\nconst rawEmail = output.customer_email ?? null;\n\nconst normalizedOrderId = typeof rawOrderId === 'string' && /^\\d{4}$/.test(rawOrderId.trim()) ? rawOrderId.trim() : null;\nconst normalizedCustomerEmail = typeof rawEmail === 'string' && rawEmail.trim() ? rawEmail.trim() : null;\n\nconst sessionId = item.sessionId || item.chatSessionId || item.session_id || (item.metadata && item.metadata.sessionId) || null;\nconst store = $getWorkflowStaticData('global');\nif (!store.sessions || typeof store.sessions !== 'object') {\n  store.sessions = {};\n}\nconst previous = sessionId && store.sessions[sessionId] ? { ...store.sessions[sessionId] } : { orderId: null, email: null };\n\nif (normalizedOrderId) {\n  previous.orderId = normalizedOrderId;\n}\nif (normalizedCustomerEmail) {\n  previous.email = normalizedCustomerEmail;\n}\n\nif (sessionId) {\n  store.sessions[sessionId] = previous;\n}\n\nconst finalOrderId = previous.orderId || null;\nconst finalEmail = previous.email || null;\nconst missing = [];\nif (!finalOrderId) missing.push('your 4-digit order number');\nif (!finalEmail) missing.push('the email address used for the purchase');\n\nlet followUpMessage = null;\nif (missing.length) {\n  const joiner = missing.length === 2 ? missing.join(' and ') : missing[0];\n  followUpMessage = 'Thanks for the details so far! Could you share ' + joiner + ' so I can pull up the order?';\n}\n\nreturn [{ json: { ...item, normalizedOrderId: finalOrderId, normalizedCustomerEmail: finalEmail, missingFields: missing, needsDetails: missing.length > 0, followUpMessage, sessionId } }];"
       },
-      "id": "0e986f0c-19bd-4b4e-ae36-1e73caa2c120",
-      "name": "Merge Chat Context",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        -1984,
-        688
-      ]
-    },
-    {
-      "parameters": {
-        "model": "anthropic/claude-sonnet-4.5",
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
-      "position": [
-        -2320,
-        912
-      ],
-      "id": "c7dae583-da56-485b-a6b0-09be96a70312",
-      "name": "OpenRouter Chat Model",
-      "credentials": {
-        "openRouterApi": {
-          "id": "g1c2oe8mRkJGr8XC",
-          "name": "OpenRouter account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "function safeParse(value) {\n  if (typeof value === 'string') {\n    const trimmed = value.trim();\n    if (!trimmed) {\n      return null;\n    }\n    try {\n      return JSON.parse(trimmed);\n    } catch (error) {\n      const start = trimmed.indexOf('{');\n      const end = trimmed.lastIndexOf('}');\n      if (start !== -1 && end !== -1 && end > start) {\n        const candidate = trimmed.slice(start, end + 1);\n        try {\n          return JSON.parse(candidate);\n        } catch (innerError) {\n          return null;\n        }\n      }\n      return null;\n    }\n  }\n  return typeof value === 'object' && value !== null ? value : null;\n}\n\nconst current = (items[0] && items[0].json) ? { ...items[0].json } : {};\nconst extraction = safeParse(current.output) || {};\nconst rawOrderId = extraction.order_id ?? null;\nconst rawEmail = extraction.customer_email ?? null;\n\nconst cleanedOrderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : rawOrderId;\nconst cleanedEmail = typeof rawEmail === 'string' ? rawEmail.trim() : rawEmail;\n\nconst freshOrderId = cleanedOrderId && cleanedOrderId !== 'null' && /^\\d{4}$/.test(String(cleanedOrderId)) ? String(cleanedOrderId) : null;\nconst freshEmail = cleanedEmail && cleanedEmail !== 'null' ? String(cleanedEmail) : null;\n\nconst sessionId = current.sessionId || current.chatSessionId || current.session_id || (current.metadata && current.metadata.sessionId) || null;\nconst store = this.getWorkflowStaticData('global');\nconst sessionState = sessionId && store[sessionId] ? { ...store[sessionId] } : { orderId: null, email: null };\n\nif (freshOrderId) sessionState.orderId = freshOrderId;\nif (freshEmail) sessionState.email = freshEmail;\n\nif (sessionId) {\n  store[sessionId] = sessionState;\n}\n\nconst normalizedOrderId = sessionState.orderId || null;\nconst normalizedCustomerEmail = sessionState.email || null;\nconst missingFields = [];\nif (!normalizedOrderId) missingFields.push('your 4-digit order number');\nif (!normalizedCustomerEmail) missingFields.push('the email address used for the purchase');\n\nreturn [{ json: { ...current, normalizedOrderId, normalizedCustomerEmail, missingFields, sessionId } }];"
-      },
-      "id": "6dd3db70-5e44-4681-b155-613371d71a0a",
+      "id": "c5e936e4-5c3b-4474-93f1-f68318948d88",
       "name": "Normalize Identifiers",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1872,
+        -1888,
         688
       ]
     },
     {
       "parameters": {
         "conditions": {
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "id-1",
-              "leftValue": "={{ ($json.missingFields || []).length }}",
-              "operator": {
-                "type": "number",
-                "operation": "gt"
-              },
-              "rightValue": 0
-            }
-          ],
           "options": {
             "caseSensitive": true,
             "leftValue": "",
             "typeValidation": "loose",
             "version": 2
-          }
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.needsDetails }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "isTrue"
+              }
+            }
+          ],
+          "combinator": "and"
         },
         "looseTypeValidation": true,
         "options": {}
       },
-      "id": "f5a43eb8-73a4-4c77-b7dd-136d9b6e4c03",
+      "id": "e82bba88-84bb-4b09-9fe8-51de155ef1cf",
       "name": "Missing Identifiers?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1648,
+        -1680,
         688
       ]
     },
     {
       "parameters": {
-        "promptType": "define",
-        "text": "=You are assisting with an online order return and must politely gather any missing identifiers before proceeding.\n\nMissing details: {{ ($json.missingFields || []).join(', ') }}\n\nCompose a concise chat reply that:\n- Thanks the customer for reaching out,\n- Clearly asks for each missing item,\n- Explains it is needed to locate their order,\n- Stays within 2 sentences.\nIf only one item is missing, ask just for that item. Return only the reply text.",
-        "options": {
-          "systemMessage": "You help customer service agents collect required order lookup details during a returns conversation."
-        }
-      },
-      "id": "4e081c2c-8dfa-4ebd-9a29-185bcfe83009",
-      "name": "Request Order Details Message",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 3,
-      "position": [
-        -1408,
-        912
-      ]
-    },
-    {
-      "parameters": {
-        "message": "={{ $('Request Order Details Message').item.json.output }}",
+        "message": "={{ $json.followUpMessage }}",
         "waitUserReply": true,
         "options": {}
       },
-      "id": "344b720b-4ce4-442a-97bc-b705f64c8051",
+      "id": "4d0ff9cf-2c4e-4a05-9ba8-8c530a8a4c6d",
       "name": "Request Order Details",
       "type": "@n8n/n8n-nodes-langchain.chat",
       "typeVersion": 1,
       "position": [
-        -1168,
-        912
-      ],
-      "executeOnce": true
-    },
-    {
-      "parameters": {
-        "model": "anthropic/claude-sonnet-4.5",
-        "options": {}
-      },
-      "id": "ee97b2e3-6e4b-4af1-99de-ef45451565cc",
-      "name": "OpenRouter Chat Model3",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "typeVersion": 1,
-      "position": [
-        -1408,
-        1120
-      ],
-      "credentials": {
-        "openRouterApi": {
-          "id": "g1c2oe8mRkJGr8XC",
-          "name": "OpenRouter account"
-        }
-      }
+        -1472,
+        848
+      ]
     },
     {
       "parameters": {
@@ -190,11 +116,11 @@
           "values": [
             {
               "lookupColumn": "Order_ID",
-              "lookupValue": "={{ $json.normalizedOrderId ?? '' }}"
+              "lookupValue": "={{ $('Normalize Identifiers').item.json.normalizedOrderId || '' }}"
             },
             {
               "lookupColumn": "Customer_Email",
-              "lookupValue": "={{ $json.normalizedCustomerEmail ?? '' }}"
+              "lookupValue": "={{ $('Normalize Identifiers').item.json.normalizedCustomerEmail || '' }}"
             }
           ]
         },
@@ -206,7 +132,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -1408,
+        -1280,
         688
       ],
       "credentials": {
@@ -215,75 +141,6 @@
           "name": "Google Sheets account"
         }
       }
-    },
-    {
-      "parameters": {
-        "options": {},
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "sessionId",
-              "type": "string",
-              "value": "={{ $item(0).$node[\"Normalize Identifiers\"].json.sessionId }}"
-            },
-            {
-              "id": "2",
-              "name": "normalizedOrderId",
-              "type": "string",
-              "value": "={{ $item(0).$node[\"Normalize Identifiers\"].json.normalizedOrderId }}"
-            },
-            {
-              "id": "3",
-              "name": "normalizedCustomerEmail",
-              "type": "string",
-              "value": "={{ $item(0).$node[\"Normalize Identifiers\"].json.normalizedCustomerEmail }}"
-            }
-          ]
-        }
-      },
-      "id": "d4f0f29f-9b5f-4dff-9e83-1f2872c8f5f7",
-      "name": "Carry Session Context",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
-      "position": [
-        -1296,
-        688
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "id-1",
-              "leftValue": "={{ $('Order Lookup (OMS)').item.json.Order_ID ?? '' }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEquals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "looseTypeValidation": true,
-        "options": {}
-      },
-      "id": "00c56839-0a23-40d9-89e0-127ad79d11f4",
-      "name": "Order Found?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        -1184,
-        688
-      ]
     },
     {
       "parameters": {
@@ -333,7 +190,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -960,
+        -1520,
         688
       ]
     },
@@ -346,7 +203,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -736,
+        -1296,
         496
       ]
     },
@@ -399,12 +256,12 @@
         },
         "options": {}
       },
-      "id": "229f793d-5156-419b-b7f4-4d93eca30dc6",
+      "id": "b54d3d1d-b8c0-4984-8c60-97c5d2224a81",
       "name": "Process Refund (Payment)",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -512,
+        -1072,
         496
       ],
       "credentials": {
@@ -417,15 +274,15 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1\u20132 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term \u201cconfirmation number,\u201d not \u201cRMA\u201d),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5\u20137 business days.\n- Return ONLY the final message text. Nothing else.\n",
+        "text": "=You are composing the final confirmation message to the customer.\n\nInputs:\n- Confirmation number: {{ $('Create RMA (WMS)').item.json.rma_number ?? $json.rma_number ?? '' }}\n- Refund amount (number): {{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no brackets, no labels).\n- Write 1–2 warm, professional sentences that:\n  1) Confirm the refund has been processed,\n  2) State the confirmation number exactly as provided (use the term “confirmation number,” not “RMA”),\n  3) State the refund amount with a dollar sign (use: ${{ Number(($('Order Lookup (OMS)').item.json.Refund_Amount ?? $json.Refund_Amount ?? 0)).toFixed(2) }}),\n  4) Provide the expected timeline: 5–7 business days.\n- Return ONLY the final message text. Nothing else.\n",
         "options": {}
       },
-      "id": "02b84405-bc10-429a-b750-be8137fd7fcc",
+      "id": "423fcb44-e974-4667-bb0c-2c18c82149c8",
       "name": "Send Confirmation",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
       "position": [
-        -288,
+        -848,
         384
       ]
     },
@@ -435,13 +292,13 @@
         "text": "=You are composing the final escalation message to the customer. Use the current item values:\n- Refund_Amount = {{ $json.Refund_Amount }}\n- Return_Eligible = {{ $json.Return_Eligible }}\n- Order_Status = {{ $json.Order_Status }}\n\nRules:\n- Output MUST be plain text only (no markdown, no bullets, no headings, no brackets, no placeholder variables).\n- Choose exactly one clear reason:\n  1) If Refund_Amount >= 200: say refunds >= $200 require manager approval.\n  2) Else if Return_Eligible !== \"Yes\": say the order doesn't meet return policy requirements.\n  3) Else if Order_Status !== \"Delivered\": say returns apply to delivered items only.\n- Be empathetic.\n- End with: \"A specialist will contact you within the hour.\"\n- Return ONLY the final message text. No preface, no template, no labels.\n",
         "options": {}
       },
-      "id": "ebd8236d-53d3-4d86-b495-8813bccacd33",
+      "id": "eff39999-3903-49d1-afe0-d2ad2be07683",
       "name": "Escalate to Human",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
       "position": [
-        -512,
-        880
+        -1168,
+        848
       ]
     },
     {
@@ -452,10 +309,30 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
       "position": [
-        -288,
-        592
+        -2096,
+        912
       ],
-      "id": "2916fe88-c92a-4022-bd98-c49f2570ab8c",
+      "id": "552dc9f2-97c4-4a7d-83c6-bfc5f019f7db",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        608
+      ],
+      "id": "f89e0a0e-e4e3-4321-ab43-3b9b3cbf6fd5",
       "name": "OpenRouter Chat Model1",
       "credentials": {
         "openRouterApi": {
@@ -472,10 +349,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
       "position": [
-        -512,
-        1104
+        -1264,
+        1024
       ],
-      "id": "f9935b01-6c40-44c7-b4f8-bcef49cc420d",
+      "id": "29af6eb9-e93c-4edb-a19a-e12c02158b4e",
       "name": "OpenRouter Chat Model2",
       "credentials": {
         "openRouterApi": {
@@ -486,32 +363,17 @@
     },
     {
       "parameters": {
-        "jsCode": "const orderPart = $json.normalizedOrderId ? `order number ${$json.normalizedOrderId}` : ($json.output?.order_id ? `order number ${$json.output.order_id}` : 'the order number you mentioned');\nconst emailPart = $json.normalizedCustomerEmail ? `email ${$json.normalizedCustomerEmail}` : ($json.output?.customer_email ? `email ${$json.output.customer_email}` : 'the email address you mentioned');\nconst prompt = `Thanks for sharing those details. I couldn't find an order using ${orderPart} with ${emailPart}. Could you double-check both and send any corrections?`;\nreturn [{ json: { ...$json, retryPrompt: prompt } }];"
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"order_id\", \"customer_email\"],\n  \"properties\": {\n    \"order_id\": { \"type\": [\"string\",\"null\"], \"pattern\": \"^\\\\d{4}$\" },\n    \"customer_email\": { \"type\": [\"string\",\"null\"], \"format\": \"email\" }\n  }\n}\n"
       },
-      "id": "abb838b9-1620-4eb6-ac60-2af5075eead5",
-      "name": "Compose Lookup Retry",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "9cecd400-a378-409b-a9bb-bfc642dfc14b",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
       "position": [
-        -736,
-        880
+        -1904,
+        896
       ]
-    },
-    {
-      "parameters": {
-        "message": "={{ $json.retryPrompt }}",
-        "waitUserReply": true,
-        "options": {}
-      },
-      "id": "89a9f1a5-2c54-43ac-b95e-12d10630435a",
-      "name": "Request Corrected Details",
-      "type": "@n8n/n8n-nodes-langchain.chat",
-      "typeVersion": 1,
-      "position": [
-        -512,
-        880
-      ],
-      "executeOnce": true
     },
     {
       "parameters": {
@@ -594,13 +456,13 @@
         },
         "options": {}
       },
-      "id": "3ea5e1f1-427b-47a2-8069-3955fe8caab5",
+      "id": "5b0d43cf-3124-48c8-b3fa-df700b0f0d9d",
       "name": "Eval Log - Automated",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -64,
-        400
+        -480,
+        432
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -611,38 +473,15 @@
     },
     {
       "parameters": {
-        "options": {},
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "sessionId",
-              "type": "string",
-              "value": "={{ $item(0).$node[\"Carry Session Context\"].json.sessionId }}"
-            }
-          ]
-        }
+        "jsCode": "const sessionId = $('Normalize Identifiers').item.json.sessionId || null;\nif (sessionId) {\n  const store = $getWorkflowStaticData('global');\n  if (store.sessions && typeof store.sessions === 'object') {\n    delete store.sessions[sessionId];\n  }\n}\nreturn items;"
       },
-      "id": "2a3d6db1-2d41-4a9a-a41d-3e9d4f42bb9d",
-      "name": "Prepare Session Close (Success)",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
-      "position": [
-        -32,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const currentItem = (items[0] && items[0].json) ? items[0].json : {};\nconst sessionId = currentItem.sessionId || currentItem.chatSessionId || currentItem.session_id || null;\nif (sessionId) {\n  const store = this.getWorkflowStaticData('global');\n  delete store[sessionId];\n}\nreturn items;"
-      },
-      "id": "5d50a14e-5e37-468b-8a46-2e19f2392a1f",
-      "name": "Clear Session State (Success)",
+      "id": "6a9cc6f9-8a50-4d7d-9443-3a1ca83a2237",
+      "name": "Clear Session (Automated)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        96,
-        400
+        -320,
+        432
       ]
     },
     {
@@ -726,13 +565,13 @@
         },
         "options": {}
       },
-      "id": "4ad25a6f-938f-466a-bd01-9dc91ecfa4da",
+      "id": "3ff2af83-22d9-426c-a4aa-5862a459d926",
       "name": "Eval Log - Escalated",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
       "position": [
-        -288,
-        880
+        -816,
+        896
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -743,38 +582,15 @@
     },
     {
       "parameters": {
-        "options": {},
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "sessionId",
-              "type": "string",
-              "value": "={{ $item(0).$node[\"Carry Session Context\"].json.sessionId }}"
-            }
-          ]
-        }
+        "jsCode": "const sessionId = $('Normalize Identifiers').item.json.sessionId || null;\nif (sessionId) {\n  const store = $getWorkflowStaticData('global');\n  if (store.sessions && typeof store.sessions === 'object') {\n    delete store.sessions[sessionId];\n  }\n}\nreturn items;"
       },
-      "id": "f1ddbf9d-98db-4a61-a986-0f17533b8ff0",
-      "name": "Prepare Session Close (Escalated)",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
-      "position": [
-        -160,
-        880
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const currentItem = (items[0] && items[0].json) ? items[0].json : {};\nconst sessionId = currentItem.sessionId || currentItem.chatSessionId || currentItem.session_id || null;\nif (sessionId) {\n  const store = this.getWorkflowStaticData('global');\n  delete store[sessionId];\n}\nreturn items;"
-      },
-      "id": "b63bd6a5-9726-4a70-8e9b-17a507b2ea43",
-      "name": "Clear Session State (Escalated)",
+      "id": "c4f93c7c-0d26-4fa5-8f48-2c1896d735d5",
+      "name": "Clear Session (Escalated)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -96,
-        880
+        -640,
+        896
       ]
     },
     {
@@ -786,11 +602,11 @@
       "type": "@n8n/n8n-nodes-langchain.chat",
       "typeVersion": 1,
       "position": [
-        -32,
-        880
+        -512,
+        896
       ],
-      "id": "0fe95fac-1a23-4c33-9498-e4bd9a50aa97",
-      "name": "Reply \u2014 Escalated",
+      "id": "4fd1aaa8-d995-4918-be19-a728922ef073",
+      "name": "Reply — Escalated",
       "executeOnce": true
     },
     {
@@ -802,14 +618,15 @@
       "type": "@n8n/n8n-nodes-langchain.chat",
       "typeVersion": 1,
       "position": [
-        224,
-        400
+        -256,
+        448
       ],
-      "id": "569f71a9-6131-4a5a-b457-9a360db56dfb",
+      "id": "1c97f52b-e293-44e7-bacc-4217df3efcfa",
       "name": "Respond to Chat",
       "executeOnce": true
     }
   ],
+  "pinData": {},
   "connections": {
     "Customer Chat (Gladly)": {
       "main": [
@@ -818,11 +635,6 @@
             "node": "Extract Order Info",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Merge Chat Context",
-            "type": "main",
-            "index": 1
           }
         ]
       ]
@@ -831,7 +643,7 @@
       "main": [
         [
           {
-            "node": "Merge Chat Context",
+            "node": "Normalize Identifiers",
             "type": "main",
             "index": 0
           }
@@ -853,7 +665,7 @@
       "main": [
         [
           {
-            "node": "Request Order Details Message",
+            "node": "Request Order Details",
             "type": "main",
             "index": 0
           }
@@ -867,40 +679,11 @@
         ]
       ]
     },
-    "Request Order Details Message": {
-      "main": [
-        [
-          {
-            "node": "Request Order Details",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Order Lookup (OMS)": {
       "main": [
         [
           {
-            "node": "Carry Session Context",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Order Found?": {
-      "main": [
-        [
-          {
             "node": "Eligibility Check",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Compose Lookup Retry",
             "type": "main",
             "index": 0
           }
@@ -958,28 +741,6 @@
         ]
       ]
     },
-    "Eval Log - Automated": {
-      "main": [
-        [
-          {
-            "node": "Prepare Session Close (Success)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Clear Session State (Success)": {
-      "main": [
-        [
-          {
-            "node": "Respond to Chat",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Escalate to Human": {
       "main": [
         [
@@ -991,55 +752,11 @@
         ]
       ]
     },
-    "Eval Log - Escalated": {
-      "main": [
-        [
-          {
-            "node": "Prepare Session Close (Escalated)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Clear Session State (Escalated)": {
-      "main": [
-        [
-          {
-            "node": "Reply \u2014 Escalated",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compose Lookup Retry": {
-      "main": [
-        [
-          {
-            "node": "Request Corrected Details",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "OpenRouter Chat Model": {
       "ai_languageModel": [
         [
           {
             "node": "Extract Order Info",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenRouter Chat Model3": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Request Order Details Message",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -1068,44 +785,55 @@
         ]
       ]
     },
-    "Merge Chat Context": {
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extract Order Info",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eval Log - Automated": {
       "main": [
         [
           {
-            "node": "Normalize Identifiers",
+            "node": "Clear Session (Automated)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Carry Session Context": {
+    "Clear Session (Automated)": {
       "main": [
         [
           {
-            "node": "Order Found?",
+            "node": "Respond to Chat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare Session Close (Success)": {
+    "Eval Log - Escalated": {
       "main": [
         [
           {
-            "node": "Clear Session State (Success)",
+            "node": "Clear Session (Escalated)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare Session Close (Escalated)": {
+    "Clear Session (Escalated)": {
       "main": [
         [
           {
-            "node": "Clear Session State (Escalated)",
+            "node": "Reply — Escalated",
             "type": "main",
             "index": 0
           }
