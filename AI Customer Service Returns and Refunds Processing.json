@@ -537,6 +537,115 @@
       "id": "1c97f52b-e293-44e7-bacc-4217df3efcfa",
       "name": "Respond to Chat",
       "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "any",
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.output.order_id ?? '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": ""
+            },
+            {
+              "id": "id-2",
+              "leftValue": "={{ $json.output.customer_email ?? '' }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": ""
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "1d1359e4-6c56-4976-84a7-4e6c2f9af30c",
+      "name": "Missing Identifiers?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1888,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const missing = [];\nif (!$json.output?.order_id) missing.push('your 4-digit order number');\nif (!$json.output?.customer_email) missing.push('the email address used for the purchase');\nreturn [{ ...$json, missingFields: missing }];"
+      },
+      "id": "20d38494-47f9-4b17-893e-c098090226f9",
+      "name": "Compile Missing Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1664,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are assisting with an online order return and must politely gather any missing identifiers before proceeding.\n\nMissing details: {{ $json.missingFields.join(', ') }}\n\nCompose a concise chat reply that:\n- Thanks the customer for reaching out,\n- Clearly asks for each missing item,\n- Explains it is needed to locate their order,\n- Stays within 2 sentences.\nIf only one item is missing, ask just for that item. Return only the reply text.",
+        "options": {
+          "systemMessage": "You help customer service agents collect required order lookup details during a returns conversation."
+        }
+      },
+      "id": "57cbc0cb-ea51-4cd1-a1d3-7621f4f963ee",
+      "name": "Request Order Details Message",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -1440,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "message": "={{ $('Request Order Details Message').item.json.output }}",
+        "options": {},
+        "waitUserReply": true
+      },
+      "id": "2fb4b7c5-73e2-4965-8362-d645b05201d5",
+      "name": "Request Order Details",
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        912
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      },
+      "id": "5ab7a664-91ac-4fa6-b1db-ae554567e546",
+      "name": "OpenRouter Chat Model3",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        1136
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "g1c2oe8mRkJGr8XC",
+          "name": "OpenRouter account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -556,7 +665,7 @@
       "main": [
         [
           {
-            "node": "Order Lookup (OMS)",
+            "node": "Missing Identifiers?",
             "type": "main",
             "index": 0
           }
@@ -697,6 +806,57 @@
           {
             "node": "Respond to Chat",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Missing Identifiers?": {
+      "main": [
+        [
+          {
+            "node": "Compile Missing Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Order Lookup (OMS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Missing Details": {
+      "main": [
+        [
+          {
+            "node": "Request Order Details Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Order Details Message": {
+      "main": [
+        [
+          {
+            "node": "Request Order Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Request Order Details Message",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]
