@@ -20,10 +20,10 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=={{ $json.chatInput || $json.text || $json.message || $json.body || $json.query || '' }}\n",
+        "text": "=Extract the 4-digit order number and the customer's email address from the message below. Respond only with a single-line JSON object that matches the required schema. Use null (without quotes) when a value is not mentioned.\n\nCustomer message:\n{{ $json.chatInput || $json.text || $json.message || $json.body || $json.query || '' }}\n",
         "hasOutputParser": true,
         "options": {
-          "systemMessage": "=Output only JSON. No extra text. No code fences. One line.\n\n{\"order_id\":\"1234\",\"customer_email\":\"user@example.com\"}\n\nRules:\n- order_id: exactly 4 digits; if missing, use null (unquoted).\n- customer_email: valid email; if missing, use null (unquoted).\n- Keys and string values must be double-quoted.\n- Do not add explanations or newlines.\n"
+          "systemMessage": "=You are a data extraction assistant. Always reply with a JSON object exactly matching this schema: {\"order_id\":\"1234\",\"customer_email\":\"user@example.com\"}.\n- order_id must be four digits when provided; otherwise use null (without quotes).\n- customer_email must be a valid email string when provided; otherwise use null (without quotes).\n- Do not include explanations, questions, or additional text.\n- Never ask the customer for more information.\n- The response must stay on a single line."
         }
       },
       "id": "cfd906fd-b8dd-4f88-becf-04d86fee746e",
@@ -583,7 +583,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const missing = [];\nif (!$json.output?.order_id) missing.push('your 4-digit order number');\nif (!$json.output?.customer_email) missing.push('the email address used for the purchase');\nreturn [{ ...$json, missingFields: missing }];"
+        "jsCode": "const missing = [];\nif (!$json.output?.order_id) missing.push('your 4-digit order number');\nif (!$json.output?.customer_email) missing.push('the email address used for the purchase');\nreturn [{ json: { ...$json, missingFields: missing } }];"
       },
       "id": "20d38494-47f9-4b17-893e-c098090226f9",
       "name": "Compile Missing Details",
