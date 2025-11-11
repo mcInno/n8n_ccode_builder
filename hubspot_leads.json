@@ -12,8 +12,7 @@
         "color": 5,
         "width": 731,
         "height": 210.61602497398542,
-        "content": "### =h
-<¤ Setup\n1. Add you **MadKudu**, **Hunter**, and **Gmail** credentials \n2. Setup your **HubSpot** Oauth2 creds using [n8n docs](https://docs.n8n.io/integrations/builtin/trigger-nodes/n8n-nodes-base.hubspottrigger/)\n3. Set the email content and subject\n4. Click the Test Workflow button, enter your email and check the Slack channel\n5. Activate the workflow and use the form trigger production URL to collect your leads in a smart way "
+        "content": "### Setup\n1. Add your **MadKudu**, **Hunter**, and **Gmail** credentials.\n2. Set up your **HubSpot** OAuth2 credentials using [n8n docs](https://docs.n8n.io/integrations/builtin/trigger-nodes/n8n-nodes-base.hubspottrigger/).\n3. Set the email content and subject.\n4. Click the Test Workflow button, enter your email, and check the Slack channel.\n5. Activate the workflow and use the form trigger production URL to collect your leads in a smart way."
       },
       "typeVersion": 1
     },
